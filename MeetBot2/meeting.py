@@ -1,46 +1,12 @@
-# Richard Darst, May 2009
-
-###
-# Copyright (c) 2009, Richard Darst
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#   * Redistributions of source code must retain the above copyright notice,
-#     this list of conditions, and the following disclaimer.
-#   * Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions, and the following disclaimer in the
-#     documentation and/or other materials provided with the distribution.
-#   * Neither the name of the author of this software nor the name of
-#     contributors to this software may be used to endorse or promote products
-#     derived from this software without specific prior written consent.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-###
-
-import time
 import os
 import re
 import stat
 import textwrap
+import time
 
-import writers
-import items
-reload(writers)
-reload(items)
+from . import items
+from . import writers
 
-__version__ = "0.1.4"
 
 class Config(object):
     #
@@ -100,14 +66,7 @@ class Config(object):
                          "Minutes:        %(urlBasename)s.html\n"
                          "Minutes (text): %(urlBasename)s.txt\n"
                          "Log:            %(urlBasename)s.log.html")
-    # Input/output codecs.
-    input_codec = 'utf-8'
-    output_codec = 'utf-8'
-    # Functions to do the i/o conversion.
-    def enc(self, text):
-        return text.encode(self.output_codec, 'replace')
-    def dec(self, text):
-        return text.decode(self.input_codec, 'replace')
+
     # Write out select logfiles
     update_realtime = True
     # CSS configs:
@@ -119,29 +78,29 @@ class Config(object):
     # This tells which writers write out which to extensions.
     writer_map = {
         '.log.html':writers.HTMLlog,
-        #'.1.html': writers.HTML,
         '.html': writers.HTML2,
-        #'.rst': writers.ReST,
         '.txt': writers.Text,
-        #'.rst.html':writers.HTMLfromReST,
         }
 
-
-    def __init__(self, M, writeRawLog=False, safeMode=False,
+    def __init__(self,
+                 M,
+                 write_raw_log=False,
+                 safeMode=False,
                  extraConfig={}):
         self.M = M
         self.writers = { }
         # Update config values with anything we may have
-        for k,v in extraConfig.iteritems():
+        for k,v in list(extraConfig.items()):
             setattr(self, k, v)
 
         if hasattr(self, "init_hook"):
             self.init_hook()
-        if writeRawLog:
+        if write_raw_log:
             self.writers['.log.txt'] = writers.TextLog(self.M)
-        for extension, writer in self.writer_map.iteritems():
+        for extension, writer in list(self.writer_map.items()):
             self.writers[extension] = writer(self.M)
         self.safeMode = safeMode
+
     def filename(self, url=False):
         # provide a way to override the filename.  If it is
         # overridden, it must be a full path (and the URL-part may not
@@ -173,6 +132,7 @@ class Config(object):
         if not url and dirname and not os.access(dirname, os.F_OK):
             os.makedirs(dirname)
         return path
+
     @property
     def basename(self):
         return os.path.basename(self.M.config.filename())
@@ -219,9 +179,9 @@ class Config(object):
             # If it doesn't, then it's assumed that the write took
             # care of writing (or publishing or emailing or wikifying)
             # it itself.
-            if isinstance(text, unicode):
+            if isinstance(text, str):
                 text = self.enc(text)
-            if isinstance(text, (str, unicode)):
+            if isinstance(text, str):
                 # Have a way to override saving, so no disk files are written.
                 if getattr(self, "dontSave", False):
                     pass
@@ -234,6 +194,7 @@ class Config(object):
         if hasattr(self, 'save_hook'):
             self.save_hook(realtime_update=realtime_update)
         return results
+
     def writeToFile(self, string, filename):
         """Write a given string to a file"""
         # The reason we have this method just for this is to proxy
@@ -243,11 +204,13 @@ class Config(object):
             self.restrictPermissions(f)
         f.write(string)
         f.close()
+
     def restrictPermissions(self, f):
         """Remove the permissions given in the variable RestrictPerm."""
         f.flush()
         newmode = os.stat(f.name).st_mode & (~self.RestrictPerm)
         os.chmod(f.name, newmode)
+
     def findFile(self, fname):
         """Find template files by searching paths.
 
@@ -266,110 +229,85 @@ class Config(object):
         return fname
 
 
-
-# Set the timezone, using the variable above
-os.environ['TZ'] = Config.timeZone
-time.tzset()
-
-# load custom local configurations
-LocalConfig = None
-import __main__
-# Two conditions where we do NOT load any local configuration files
-if getattr(__main__, 'running_tests', False): pass
-elif 'MEETBOT_RUNNING_TESTS' in os.environ:   pass
-else:
-    # First source of config: try just plain importing it
-    try:
-        import meetingLocalConfig
-        meetingLocalConfig = reload(meetingLocalConfig)
-        if hasattr(meetingLocalConfig, 'Config'):
-            LocalConfig = meetingLocalConfig.Config
-    except ImportError:
-        pass
-    if LocalConfig is None:
-        for dirname in (os.path.dirname("__file__"), "."):
-            fname = os.path.join(dirname, "meetingLocalConfig.py")
-            if os.access(fname, os.F_OK):
-                meetingLocalConfig = { }
-                execfile(fname, meetingLocalConfig)
-                LocalConfig = meetingLocalConfig["Config"]
-                break
-    if LocalConfig is not None:
-        # Subclass Config and LocalConfig, new type overrides Config.
-        Config = type('Config', (LocalConfig, Config), {})
-
-
 class MeetingCommands(object):
-    # Command Definitions
-    # generic parameters to these functions:
-    #  nick=
-    #  line=    <the payload of the line>
-    #  linenum= <the line number, 1-based index (for logfile)>
-    #  time_=   <time it was said>
-    # Commands for Chairs:
-    def do_startmeeting(self, nick, time_, line, **kwargs):
+
+    def __init__(self):
+        self.current_topic = ''
+        self.meeting_topic = ''
+        self.start_time = ''
+        self.expected_end = time.mktime(time_) + self.length * 60
+
+    def do_start_meeting(self, nick, time_, line, **kwargs):
         """Begin a meeting."""
-        self.starttime = time_
-        self.expectedend = time.mktime(time_) + self.length * 60
         repl = self.replacements()
         message = self.config.startMeetingMessage%repl
         for messageline in message.split('\n'):
             self.reply(messageline)
         if line.strip():
-            self.do_meetingtopic(nick=nick, line=line, time_=time_, **kwargs)
+            self.set_meeting_topic(nick=nick, line=line, time_=time_, **kwargs)
             self.do_meetingname(nick=nick, line=line, time_=time_, **kwargs)
-    def do_endmeeting(self, nick, time_, **kwargs):
+
+    def do_end_meeting(self, nick, time_, **kwargs):
         """End the meeting."""
         # Chairs can end the meeting early - anyone can end it after the meeting length
-        if (not self.isChair(nick)) and (self.expectedend > time.mktime(time_)): return
-        if self.oldtopic:
-            self.topic(self.oldtopic)
+        if (not self.isChair(nick)) and (self.expected_end > time.mktime(time_)): return
+        if self.old_topic:
+            self.topic(self.old_topic)
         self.endtime = time_
         self.config.save()
         repl = self.replacements()
         message = self.config.endMeetingMessage%repl
         for messageline in message.split('\n'):
             self.reply(messageline)
-        self._meetingIsOver = True
-    def do_topic(self, nick, line, **kwargs):
+        self.meeting_is_over = True
+
+    def do_set_channel_topic(self, nick, line, **kwargs):
         """Set a new topic in the channel."""
-        if not self.isChair(nick): return
-        self.currenttopic = line
+        if not self.isChair(nick):
+            return
+
+        self.current_topic = line
         m = items.Topic(nick=nick, line=line, **kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
         self.settopic()
-    def do_meetingtopic(self, nick, line, **kwargs):
+
+    def do_set_meeting_topic(self, nick, line, **kwargs):
         """Set a meeting topic (included in all sub-topics)"""
         if not self.isChair(nick): return
         line = line.strip()
         if line == '' or line.lower() == 'none' or line.lower() == 'unset':
-            self._meetingTopic = None
+            self.meeting_topic = None
         else:
-            self._meetingTopic = line
+            self.meeting_topic = line
         self.settopic()
+
     def do_save(self, nick, time_, **kwargs):
-        """Add a chair to the meeting."""
+        """Save the config???"""
         if not self.isChair(nick): return
         self.endtime = time_
         self.config.save()
+
     def do_agreed(self, nick, **kwargs):
         """Add agreement to the minutes - chairs only."""
         if not self.isChair(nick): return
         m = items.Agreed(nick, **kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
     do_agree = do_agreed
+
     def do_accepted(self, nick, **kwargs):
         """Add agreement to the minutes - chairs only."""
         if not self.isChair(nick): return
         m = items.Accepted(nick, **kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
     do_accept = do_accepted
+
     def do_rejected(self, nick, **kwargs):
         """Add agreement to the minutes - chairs only."""
         if not self.isChair(nick): return
         m = items.Rejected(nick, **kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
     do_reject = do_rejected
+
     def do_chair(self, nick, line, **kwargs):
         """Add a chair to the meeting."""
         if not self.isChair(nick): return
@@ -386,6 +324,7 @@ class MeetingCommands(object):
         chairs = dict(self.chairs) # make a copy
         chairs.setdefault(self.owner, True)
         self.reply("Current chairs: %s"%(" ".join(sorted(chairs.keys()))))
+
     def do_unchair(self, nick, line, **kwargs):
         """Remove a chair to the meeting (founder can not be removed)."""
         if not self.isChair(nick): return
@@ -396,26 +335,31 @@ class MeetingCommands(object):
         chairs = dict(self.chairs) # make a copy
         chairs.setdefault(self.owner, True)
         self.reply("Current chairs: %s"%(" ".join(sorted(chairs.keys()))))
+
     def do_undo(self, nick, **kwargs):
         """Remove the last item from the minutes."""
         if not self.isChair(nick): return
         if len(self.minutes) == 0: return
         self.reply("Removing item from minutes: %s"%str(self.minutes[-1]))
         del self.minutes[-1]
-    def do_restrictlogs(self, nick, **kwargs):
+
+    def do_restrict_logs(self, nick, **kwargs):
         """When saved, remove permissions from the files."""
         if not self.isChair(nick): return
-        self._restrictlogs = True
+        self.restrict_logs = True
         self.reply("Restricting permissions on minutes: -%s on next #save"%\
                    oct(RestrictPerm))
+
     def do_lurk(self, nick, **kwargs):
         """Don't interact in the channel."""
         if not self.isChair(nick): return
         self._lurk = True
+
     def do_unlurk(self, nick, **kwargs):
         """Do interact in the channel."""
         if not self.isChair(nick): return
         self._lurk = False
+
     def do_meetingname(self, nick, time_, line, **kwargs):
         """Set the variable (meetingname) which can be used in save.
 
@@ -424,6 +368,7 @@ class MeetingCommands(object):
         meetingname = re.sub(r'[^a-z0-9]', '_', meetingname)
         self._meetingname = meetingname
         self.reply("The meeting name has been set to '%s'"%meetingname)
+
     # Commands for Anyone:
     def do_action(self, **kwargs):
         """Add action item to the minutes.
@@ -434,20 +379,24 @@ class MeetingCommands(object):
         made for them, but you can use the #nick command to cause a
         nick to be seen."""
         m = items.Action(**kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
+
     def do_info(self, **kwargs):
         """Add informational item to the minutes."""
         m = items.Info(**kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
+
     def do_idea(self, **kwargs):
         """Add informational item to the minutes."""
         m = items.Idea(**kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
+
     def do_help(self, **kwargs):
         """Add call for help to the minutes."""
         m = items.Help(**kwargs)
-        self.additem(m)
+        self.add_to_minutes(m)
     do_halp = do_help
+
     def do_nick(self, nick, line, **kwargs):
         """Make meetbot aware of a nick which hasn't said anything.
 
@@ -457,55 +406,60 @@ class MeetingCommands(object):
             nick = nick.strip()
             if not nick: continue
             self.addnick(nick, lines=0)
+
     def do_link(self, **kwargs):
         """Add informational item to the minutes."""
         m = items.Link(M=self, **kwargs)
-        self.additem(m)
-    def do_startvote(self, nick, line, **kwargs):
+        self.add_to_minutes(m)
+
+    def do_start_vote(self, nick, line, **kwargs):
         """Begin voting on a topic.
 
         Format of command is #startvote $TOPIC $Options.
         eg #startvote What color should we use? blue, red, green"""
-        voteDetails = self.config.startvote_RE.match(line)
+        
+        vote_details = self.config.startvote_RE.match(line)
         if not self.isChair(nick):
             self.reply("Only the meeting chair may start a vote.")
             return
-        elif self._voteTopic is not None:
-            self.reply("Already voting on '%s'" % self._voteTopic)
+        elif self.vote_topic is not None:
+            self.reply("Already voting on '%s'" % self.vote_topic)
             return
-        elif voteDetails is None:
+        elif vote_details is None:
             self.reply("Unable to parse vote topic and options.")
             return
-        self._voteTopic = voteDetails.group("question")
-        voteOptions = voteDetails.group("choices")
+        self.vote_topic = vote_details.group("question")
+        voteOptions = vote_details.group("choices")
         if voteOptions == "":
             self._voteOptions = self.config.defaultVoteOptions
         else:
             self._voteOptions = self.config.choicesSplit_RE.split(voteOptions)
         self.reply("Begin voting on: %s? Valid vote options are %s." % \
-            (self._voteTopic, ", ".join(self._voteOptions)))
+            (self.vote_topic, ", ".join(self._voteOptions)))
         self.reply("Vote using '#vote OPTION'. Only your last vote counts.")
+
     def do_endvote(self, nick, line, **kwargs):
         """End voting on topic."""
-        if not self.isChair(nick) or self._voteTopic is None: return
-        m = 'Voted on "%s?" Results are' % self._voteTopic
+        if not self.isChair(nick) or self.vote_topic is None: return
+        m = 'Voted on "%s?" Results are' % self.vote_topic
         self.reply(m)
         self.do_showvote(**kwargs)
-        for k,s in self._votes.iteritems():
-            vote = self._voteOptions[map(unicode.lower,
-                                        self._voteOptions).index(k)]
+        for k,s in list(self._votes.items()):
+            vote = self._voteOptions[list(map(str.lower,
+                                        self._voteOptions)).index(k)]
             m += ", %s: %s" % (vote, len(s))
         m = items.Vote(nick=nick, line=m, **kwargs)
-        self.additem(m)
-        self._voteTopic = None
+        self.add_to_minutes(m)
+        self.vote_topic = None
         self._voteOptions = None
         self._votes = { }
         self._voters = { }
+
     def do_vote(self, nick, line, **kwargs):
         """Vote for specific voting topic option."""
-        if self._voteTopic is None: return
+        if self.vote_topic is None: return
         vote = line.lower()
-        if vote in map(unicode.lower, self._voteOptions):
+        if vote in list(map(str.lower, self._voteOptions)):
             oldvote = self._voters.get(nick)
             if oldvote is not None:
                 self._votes[oldvote].remove(nick)
@@ -517,61 +471,72 @@ class MeetingCommands(object):
             m = "%s: %s is not a valid option. Valid options are %s." % \
                 (nick, line, ", ".join(self._voteOptions))
             self.reply(m)
+
     def do_showvote(self, **kwargs):
         """Show intermediate vote results."""
-        if self._voteTopic is None: return
-        for k, s in self._votes.iteritems():
+        if self.vote_topic is None: return
+        for k, s in list(self._votes.items()):
             # Attempt to print all the names while obeying the 512 character
             # limit. Would probably be better to calculate message overhead and
             # determine wraps()s width argument based on that.
             ms = textwrap.wrap(", ".join(s), 400)
-            vote = self._voteOptions[map(unicode.lower,
-                                        self._voteOptions).index(k)]
+            vote = self._voteOptions[list(map(str.lower,
+                                        self._voteOptions)).index(k)]
             for m2 in ms:
                 m1 = "%s (%s): " % (vote, len(s))
                 self.reply(m1 + m2)
+
     def do_commands(self, **kwargs):
         commands = [ "#"+x[3:] for x in dir(self) if x[:3]=="do_" ]
         commands.sort()
         self.reply("Available commands: "+(" ".join(commands)))
-            
 
 
 class Meeting(MeetingCommands, object):
     _lurk = False
-    _restrictlogs = False
-    def __init__(self, channel, owner, oldtopic=None,
-                 filename=None, writeRawLog=False,
-                 setTopic=None, sendReply=None, getRegistryValue=None,
-                 safeMode=False, channelNicks=None,
-                 extraConfig={}, network='nonetwork', length=60):
+    restrict_logs = False
+
+    def __init__(self, channel, owner,
+                 old_topic=None,
+                 filename=None,
+                 write_raw_log=False,
+                 setTopic=None,
+                 sendReply=None,
+                 getRegistryValue=None,
+                 safeMode=False,
+                 channelNicks=None,
+                 extraConfig={},
+                 network='nonetwork',
+                 length=60):
+
         if getRegistryValue is not None:
             self._registryValue = getRegistryValue
         if sendReply is not None:
             self._sendReply = sendReply
         if setTopic is not None:
             self._setTopic = setTopic
+
         self.owner = owner
         self.channel = channel
         self.network = network
         self.length = length
-        self.currenttopic = ""
-        self.config = Config(self, writeRawLog=writeRawLog, safeMode=safeMode,
+        self.current_topic = ""
+        self.config = Config(self, write_raw_log=write_raw_log, safeMode=safeMode,
                             extraConfig=extraConfig)
-        if oldtopic:
-            self.oldtopic = self.config.dec(oldtopic)
+        if old_topic:
+            self.old_topic = self.config.dec(old_topic)
         else:
-            self.oldtopic = None
+            self.old_topic = None
         self.lines = [ ]
         self.minutes = [ ]
         self.attendees = { }
         self.chairs = { }
-        self._writeRawLog = writeRawLog
-        self._meetingTopic = None
+        self._write_raw_log = write_raw_log
+        self.meeting_topic = None
         self._meetingname = ""
-        self._meetingIsOver = False
+        self.meeting_is_over = False
         self._channelNicks = channelNicks
-        self._voteTopic = None
+        self.vote_topic = None
         self._votes = { }
         self._voters = { }
         if filename:
@@ -584,43 +549,47 @@ class Meeting(MeetingCommands, object):
         if hasattr(self, '_sendReply') and not self._lurk:
             self._sendReply(self.config.enc(x))
         else:
-            print "REPLY:", self.config.enc(x)
+            print(("REPLY:", self.config.enc(x)))
+
     def topic(self, x):
         """Set the topic in the IRC channel."""
         if hasattr(self, '_setTopic') and not self._lurk:
             self._setTopic(self.config.enc(x))
         else:
-            print "TOPIC:", self.config.enc(x)
+            print(("TOPIC:", self.config.enc(x)))
+
     def settopic(self):
         "The actual code to set the topic"
-        if self._meetingTopic:
-            topic = '%s (Meeting topic: %s)'%(self.currenttopic,
-                                              self._meetingTopic)
+        if self.meeting_topic:
+            topic = '%s (Meeting topic: %s)'%(self.current_topic,
+                                              self.meeting_topic)
         else:
-            topic = self.currenttopic
+            topic = self.current_topic
         self.topic(topic)
+
     def addnick(self, nick, lines=1):
         """This person has spoken, lines=<how many lines>"""
         self.attendees[nick] = self.attendees.get(nick, 0) + lines
+
     def isChair(self, nick):
         """Is the nick a chair?"""
         return (nick == self.owner  or  nick in self.chairs)
+
     def save(self, **kwargs):
         return self.config.save(**kwargs)
+
     # Primary entry point for new lines in the log:
-    def addline(self, nick, line, time_=None):
-        """This is the way to add lines to the Meeting object.
-        """
+    def add_line(self, nick, line, time_=None):
+        """This is the way to add lines to the Meeting object."""
         linenum = self.addrawline(nick, line, time_)
 
-        if time_ is None: time_ = time.localtime()
-        nick = self.config.dec(nick)
-        line = self.config.dec(line)
+        if time_ is None:
+            time_ = time.localtime()
 
         # Handle any commands given in the line.
-        matchobj = self.config.command_RE.match(line)
-        if matchobj is not None:
-            command, line = matchobj.groups()
+        matches = self.config.command_RE.match(line)
+        if matches is not None:
+            command, line = matches.groups()
             command = command.lower()
             # to define new commands, define a method do_commandname .
             if hasattr(self, "do_"+command):
@@ -655,19 +624,20 @@ class Meeting(MeetingCommands, object):
         linenum = len(self.lines)
         return linenum
 
-    def additem(self, m):
+    def add_to_minutes(self, m):
         """Add an item to the meeting minutes list.
         """
         self.minutes.append(m)
+        
     def replacements(self):
         repl = { }
         repl['channel'] = self.channel
         repl['network'] = self.network
         repl['MeetBotInfoURL'] = self.config.MeetBotInfoURL
         repl['timeZone'] = self.config.timeZone
-        repl['starttime'] = repl['endtime'] = "None"
-        if getattr(self, "starttime", None) is not None:
-            repl['starttime'] = time.asctime(self.starttime)
+        repl['start_time'] = repl['endtime'] = "None"
+        if getattr(self, "start_time", None) is not None:
+            repl['start_time'] = time.asctime(self.start_time)
         if getattr(self, "endtime", None) is not None:
             repl['endtime'] = time.asctime(self.endtime)
         repl['length'] = self.length
@@ -676,89 +646,3 @@ class Meeting(MeetingCommands, object):
         repl['urlBasename'] = self.config.filename(url=True)
         repl['basename'] = os.path.basename(self.config.filename())
         return repl
-
-
-
-
-
-def parse_time(time_):
-    # Need a date > 1970 to convert to a timestamp for comparisons.
-    # Without a year here, Python assumes 1900.
-    try: return time.strptime("01/01/2000 "+time_, "%m/%d/%Y %H:%M:%S")
-    except ValueError: pass
-    try: return time.strptime("01/01/2000 "+time_, "%m/%d/%Y %H:%M")
-    except ValueError: pass
-logline_re = re.compile(r'\[?([0-9: ]*)\]? *<[@+]?([^>]+)> *(.*)')
-loglineAction_re = re.compile(r'\[?([0-9: ]*)\]? *\* *([^ ]+) *(.*)')
-
-
-def process_meeting(contents, channel, filename,
-                    extraConfig = {},
-                    dontSave=False,
-                    safeMode=True,
-                    existingMeeting=None):
-    # Allow tests part way through the meeting
-    if existingMeeting:
-        M = existingMeeting
-    else:
-        M = Meeting(channel=channel, owner=None,
-                    filename=filename, writeRawLog=False, safeMode=safeMode,
-                    extraConfig=extraConfig)
-        if dontSave:
-            M.config.dontSave = True
-    # process all lines
-    for line in contents.split('\n'):
-        # match regular spoken lines:
-        m = logline_re.match(line)
-        if m:
-            time_ = parse_time(m.group(1).strip())
-            nick = m.group(2).strip()
-            line = m.group(3).strip()
-            if M.owner is None:
-                M.owner = nick ; M.chairs = {nick:True}
-            M.addline(nick, line, time_=time_)
-        # match /me lines
-        m = loglineAction_re.match(line)
-        if m:
-            time_ = parse_time(m.group(1).strip())
-            nick = m.group(2).strip()
-            line = m.group(3).strip()
-            M.addline(nick, "ACTION "+line, time_=time_)
-    return M
-
-# None of this is very well refined.
-if __name__ == '__main__':
-    import sys
-    if sys.argv[1] == 'replay':
-        fname = sys.argv[2]
-        m = re.match('(.*)\.log\.txt', fname)
-        if m:
-            filename = m.group(1)
-        else:
-            filename = os.path.splitext(fname)[0]
-        print 'Saving to:', filename
-        channel = '#'+os.path.basename(sys.argv[2]).split('.')[0]
-
-        M = Meeting(channel=channel, owner=None,
-                    filename=filename, writeRawLog=False)
-        for line in file(sys.argv[2]):
-            # match regular spoken lines:
-            m = logline_re.match(line)
-            if m:
-                time_ = parse_time(m.group(1).strip())
-                nick = m.group(2).strip()
-                line = m.group(3).strip()
-                if M.owner is None:
-                    M.owner = nick ; M.chairs = {nick:True}
-                M.addline(nick, line, time_=time_)
-            # match /me lines
-            m = loglineAction_re.match(line)
-            if m:
-                time_ = parse_time(m.group(1).strip())
-                nick = m.group(2).strip()
-                line = m.group(3).strip()
-                M.addline(nick, "ACTION "+line, time_=time_)
-        #M.save() # should be done by #endmeeting in the logs!
-    else:
-        print 'Command "%s" not found.'%sys.argv[1]
-

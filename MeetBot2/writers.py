@@ -1,79 +1,45 @@
-# Richard Darst, June 2009
-
-###
-# Copyright (c) 2009, Richard Darst
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#   * Redistributions of source code must retain the above copyright notice,
-#     this list of conditions, and the following disclaimer.
-#   * Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions, and the following disclaimer in the
-#     documentation and/or other materials provided with the distribution.
-#   * Neither the name of the author of this software nor the name of
-#     contributors to this software may be used to endorse or promote products
-#     derived from this software without specific prior written consent.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-###
-
 import os
 import re
 import textwrap
 import time
 
-#from meeting import timeZone, meetBotInfoURL
-
-# Needed for testing with isinstance() for properly writing.
-#from items import Topic, Action
-import items
 
 # Data sanitizing for various output methods
 def html(text):
     """Escape bad sequences (in HTML) in user-generated lines."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-rstReplaceRE = re.compile('_( |-|$)')
+
+
 def rst(text):
     """Escapes bad sequences in reST"""
-    return rstReplaceRE.sub(r'\_\1', text)
-def text(text):
-    """Escapes bad sequences in text (not implemented yet)"""
-    return text
-def mw(text):
-    """Escapes bad sequences in MediaWiki markup (not implemented yet)"""
-    return text
+    matches = re.compile('_( |-|$)')
+    return matches.sub(r'\_\1', text)
 
 
 # wraping functions (for RST)
 class TextWrapper(textwrap.TextWrapper):
+    # why is this a class?
     wordsep_re = re.compile(r'(\s+)')
+
+
 def wrapList(item, indent=0):
     return TextWrapper(width=72, initial_indent=' '*indent,
                        subsequent_indent= ' '*(indent+2),
                        break_long_words=False).fill(item)
+
+
 def replaceWRAP(item):
     re_wrap = re.compile(r'sWRAPs(.*)eWRAPe', re.DOTALL)
     def repl(m):
         return TextWrapper(width=72, break_long_words=False).fill(m.group(1))
     return re_wrap.sub(repl, item)
 
+
 def makeNickRE(nick):
     return re.compile('\\b'+re.escape(nick)+'\\b', re.IGNORECASE)
 
 def MeetBotVersion():
-    import meeting
+    from . import meeting
     if hasattr(meeting, '__version__'):
         return ' '+meeting.__version__
     else:
@@ -120,13 +86,14 @@ class _BaseWriter(object):
                 'MeetBotInfoURL':self.M.config.MeetBotInfoURL,
                 'MeetBotVersion':MeetBotVersion(),
              }
+
     def iterNickCounts(self):
-        nicks = [ (n,c) for (n,c) in self.M.attendees.iteritems() ]
+        nicks = [ (n,c) for (n,c) in list(self.M.attendees.items()) ]
         nicks.sort(key=lambda x: x[1], reverse=True)
         return nicks
 
     def iterActionItemsNick(self):
-        for nick in sorted(self.M.attendees.keys(), key=lambda x: x.lower()):
+        for nick in sorted(list(self.M.attendees.keys()), key=lambda x: x.lower()):
             nick_re = makeNickRE(nick)
             def nickitems(nick_re):
                 for m in self.M.minutes:
@@ -136,6 +103,7 @@ class _BaseWriter(object):
                     m.assigned = True
                     yield m
             yield nick, nickitems(nick_re=nick_re)
+
     def iterActionItemsUnassigned(self):
         for m in self.M.minutes:
             if m.itemtype != "ACTION": continue
@@ -301,13 +269,13 @@ class Template(_BaseWriter):
         return stream.render()
 
 
-
 class _CSSmanager(object):
     _css_head = textwrap.dedent('''\
         <style type="text/css">
         %s
         </style>
         ''')
+
     def getCSS(self, name):
         cssfile = getattr(self.M.config, 'cssFile_'+name, '')
         if cssfile.lower() == 'none':
@@ -330,12 +298,12 @@ class _CSSmanager(object):
                 css_head = ('''<link rel="stylesheet" type="text/css" '''
                             '''href="%s">'''%cssfile)
                 return css_head
-        except Exception, exc:
+        except Exception as exc:
             if not self.M.config.safeMode:
                 raise
             import traceback
             traceback.print_exc()
-            print "(exception above ignored, continuing)"
+            print("(exception above ignored, continuing)")
             try:
                 css_fname = os.path.join(os.path.dirname(__file__),
                                          'css-'+name+'-default.css')
@@ -355,7 +323,6 @@ class TextLog(_BaseWriter):
         """Write raw text logs."""
         return "\n".join(M.lines)
     update_realtime = True
-
 
 
 class HTMLlog1(_BaseWriter):
@@ -403,6 +370,7 @@ class HTMLlog1(_BaseWriter):
                          r"\npre { white-space: pre-wrap; }\1",
                          out, count=1)
         return out
+
 
 class HTMLlog2(_BaseWriter, _CSSmanager):
     def format(self, extension=None):
@@ -471,9 +439,9 @@ class HTMLlog2(_BaseWriter, _CSSmanager):
                                 'nick':html(m.group('nick')),
                                 'line':html(m.group('line')),})
                 continue
-            print l
-            print m.groups()
-            print "**error**", l
+            print(l)
+            print((m.groups()))
+            print(("**error**", l))
 
         css = self.getCSS(name='log')
         return html_template%{'pageTitle':"%s log"%html(M.channel),
@@ -481,10 +449,9 @@ class HTMLlog2(_BaseWriter, _CSSmanager):
                               'body':"<pre>"+("\n".join(lines))+"</pre>",
                               'headExtra':css,
                               }
+
+
 HTMLlog = HTMLlog2
-
-
-
 html_template = textwrap.dedent('''\
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
     <html>
@@ -850,7 +817,7 @@ class ReST(_BaseWriter):
 
         # Action Items, by person (This could be made lots more efficient)
         ActionItemsPerson = [ ]
-        for nick in sorted(M.attendees.keys(), key=lambda x: x.lower()):
+        for nick in sorted(list(M.attendees.keys()), key=lambda x: x.lower()):
             nick_re = makeNickRE(nick)
             headerPrinted = False
             for m in M.minutes:
@@ -956,7 +923,7 @@ class Text(_BaseWriter):
         ActionItemsPerson = [ ]
         ActionItemsPerson.append(self.heading('Action items, by person'))
         numberAssigned = 0
-        for nick in sorted(M.attendees.keys(), key=lambda x: x.lower()):
+        for nick in sorted(list(M.attendees.keys()), key=lambda x: x.lower()):
             nick_re = makeNickRE(nick)
             headerPrinted = False
             for m in M.minutes:
@@ -1084,7 +1051,7 @@ class MediaWiki(_BaseWriter):
         ActionItemsPerson = [ ]
         ActionItemsPerson.append(self.heading('Action items, by person'))
         numberAssigned = 0
-        for nick in sorted(M.attendees.keys(), key=lambda x: x.lower()):
+        for nick in sorted(list(M.attendees.keys()), key=lambda x: x.lower()):
             nick_re = makeNickRE(nick)
             headerPrinted = False
             for m in M.minutes:
@@ -1182,15 +1149,15 @@ class MediaWiki(_BaseWriter):
             some = page.edit()
             page.save(body, summary="Meeting")
 
-
         return body
+
 
 class PmWiki(MediaWiki, object):
     def heading(self, name, level=1):
         return '%s %s\n'%('!'*(level+1), name)
+
     def replacements(self):
-        #repl = super(PmWiki, self).replacements(self) # fails, type checking
-        repl = MediaWiki.replacements.im_func(self)
+        repl = MediaWiki.replacements.__func__(self)
         repl['pageTitleHeading'] = self.heading(repl['pageTitle'],level=0)
         return repl
 

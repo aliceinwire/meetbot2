@@ -1,12 +1,10 @@
 
 from distutils.core import setup
-setup(name='MeetBot',
+setup(name='MeetBot2',
       description='IRC Meeting Helper',
-      version='0.1.4',
-      packages=['supybot.plugins.MeetBot',
-                'ircmeeting'],
-      package_dir={'supybot.plugins.MeetBot':'MeetBot'},
-      package_data={'ircmeeting':['*.html', '*.txt', '*.css']},
-      author="Richard Darst",
-      author_email="rkd@zgib.net"
+      version='0.0.1',
+      packages=['supybot.plugins.MeetBot2']
+      package_dir={'supybot.plugins.MeetBot2':'MeetBot2'},
+      author="DW Taltom",
+      author_email="dtalton@contractor.linuxfoundation.org"
       )

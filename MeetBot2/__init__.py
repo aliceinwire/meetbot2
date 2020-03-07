@@ -1,5 +1,5 @@
 ###
-# Copyright (c) 2009, Richard Darst
+# Copyright (c) 2020, dwt2
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -29,35 +29,40 @@
 ###
 
 """
-Add a description of the plugin (to be presented to the user inside the wizard)
-here.  This should describe *what* the plugin does.
+MeetBot2: MeetBot Reborn
 """
 
+import sys
 import supybot
-import supybot.world as world
+from supybot import world
 
-# Use this for the version of this plugin.  You may wish to put a CVS keyword
-# in here if you're keeping the plugin in CVS or some similar system.
+# Use this for the version of this plugin.
 __version__ = ""
 
 # XXX Replace this with an appropriate author or supybot.Author instance.
-__author__ = supybot.Author('Richard Darst', 'darst', 'rkd@zgib.net')
+__author__ = supybot.authors.unknown
 
 # This is a dictionary mapping supybot.Author instances to lists of
 # contributions.
 __contributors__ = {}
 
 # This is a url where the most recent plugin package can be downloaded.
-__url__ = '' # 'http://supybot.com/Members/yourname/MeetBot/download'
+__url__ = ''
 
-import config
-import plugin
-reload(plugin) # In case we're being reloaded.
+from . import config
+from . import plugin
+if sys.version_info >= (3, 4):
+    from importlib import reload
+else:
+    from imp import reload
+# In case we're being reloaded.
+reload(config)
+reload(plugin)
 # Add more reloads here if you add third-party modules and want them to be
 # reloaded when this plugin is reloaded.  Don't forget to import them as well!
 
 if world.testing:
-    import test
+    from . import test
 
 Class = plugin.Class
 configure = config.configure
