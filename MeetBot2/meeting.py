@@ -52,7 +52,7 @@ class Config(object):
     # you have to use doubled percent signs.  Also, it gets split by
     # '\n' and each part between newlines get said in a separate IRC
     # message.
-    startMeetingMessage = ("Meeting started %(starttime)s %(timeZone)s "
+    startMeetingMessage = ("Meeting started %(start_time)s %(timeZone)s "
                            "and is due to finish in %(length)d minutes.  "
                            "The chair is %(chair)s. Information about MeetBot at "
                            "%(MeetBotInfoURL)s.\n"
@@ -120,7 +120,7 @@ class Config(object):
             meetingname = channel
         path = pattern%{'channel':channel, 'network':network,
                         'meetingname':meetingname}
-        path = time.strftime(path, self.M.starttime)
+        path = time.strftime(path, self.M.start_time)
         # If we want the URL name, append URL prefix and return
         if url:
             return os.path.join(self.logUrlPrefix, path)
@@ -141,7 +141,7 @@ class Config(object):
         If `realtime_update` is true, then this isn't a complete save,
         it will only update those writers with the update_realtime
         attribute true.  (default update_realtime=False for this method)"""
-        if realtime_update and not hasattr(self.M, 'starttime'):
+        if realtime_update and not hasattr(self.M, 'start_time'):
             return
         rawname = self.filename()
         # We want to write the rawlog (.log.txt) first in case the
@@ -281,8 +281,9 @@ class MeetingCommands(object):
 
     def do_save(self, nick, time_, **kwargs):
         """Save the config???"""
-        if not self.isChair(nick): return
-        self.endtime = time_
+        if not self.isChair(nick):
+            return
+        self.end_time = time.localtime()
         self.config.save()
 
     def do_agreed(self, nick, **kwargs):
@@ -522,7 +523,7 @@ class Meeting(MeetingCommands, object):
         self.config = Config(self, write_raw_log=write_raw_log, safeMode=safeMode,
                             extraConfig=extraConfig)
         if old_topic:
-            self.old_topic = self.config.dec(old_topic)
+            self.old_topic = old_topic
         else:
             self.old_topic = None
         self.lines = [ ]
