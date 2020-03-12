@@ -9,14 +9,12 @@ from . import writers
 
 
 class Config(object):
-    #
-    # Throw any overrides into meetingLocalConfig.py in this directory:
-    #
-    # Where to store files on disk
-    # Example:   logFileDir = '/home/richard/meetbot/'
+    # Where to store the meeting logs
     logFileDir = '.'
     # The links to the logfiles are given this prefix
     # Example:   logUrlPrefix = 'http://rkd.zgib.net/meetbot/'
+    # I feel like we should write the logs to a public html dir, not keep them locally
+    # or setup a rsync or something
     logUrlPrefix = ''
     # Give the pattern to save files into here.  Use %(channel)s for
     # channel.  This will be sent through strftime for substituting it
@@ -24,7 +22,7 @@ class Config(object):
     # signs (%%).  This will be joined with the directories above.
     filenamePattern = '%(channel)s/%%Y/%(channel)s.%%F-%%H.%%M'
     # Where to say to go for more information about MeetBot
-    MeetBotInfoURL = 'http://wiki.debian.org/MeetBot'
+    MeetBotInfoURL = 'https://github.com/dwt2/meetbot2'
     # This is used with the #restrict command to remove permissions from files.
     RestrictPerm = stat.S_IRWXO|stat.S_IRWXG  # g,o perm zeroed
     # RestrictPerm = stat.S_IRWXU|stat.S_IRWXO|stat.S_IRWXG  #u,g,o perm zeroed
@@ -605,8 +603,8 @@ class Meeting(MeetingCommands, object):
     def addrawline(self, nick, line, time_=None):
         """This adds a line to the log, bypassing command execution.
         """
-        nick = self.config.dec(nick)
-        line = self.config.dec(line)
+        # nick = self.config.dec(nick)
+        # line = self.config.dec(line)
         self.addnick(nick)
         line = line.strip(' \x01') # \x01 is present in ACTIONs
         # Setting a custom time is useful when replying logs,

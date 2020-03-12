@@ -36,18 +36,10 @@ import sys
 import supybot
 from supybot import world
 
-# Use this for the version of this plugin.
-__version__ = ""
-
-# XXX Replace this with an appropriate author or supybot.Author instance.
-__author__ = supybot.authors.unknown
-
-# This is a dictionary mapping supybot.Author instances to lists of
-# contributions.
+__version__ = "0.0.1"
+__author__ = supybot.Author('DW Talton', 'bitblt23', 'don.talton@gmail.com')
 __contributors__ = {}
-
-# This is a url where the most recent plugin package can be downloaded.
-__url__ = ''
+__url__ = 'https://github.com/dwt2/meetbot2'
 
 from . import config
 from . import plugin
